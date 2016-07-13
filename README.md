@@ -7,4 +7,10 @@ Converts the markdown content into plain text. Requires [`mistune`](https://gith
 
 ## update-lastmod.py
 
-Updates the `lastmod` frontmatter value to the current date and time. Parses stdio or accepts a single filepath as an argument.
+Updates the `lastmod` frontmatter value to the current date and time. Parses `stdio` or accepts a single filepath as an argument.
+
+## watch-lastmod.sh
+
+Watches a directory for any changes in `.md` files. Defaults to watch `./content/` if no argument is supplied. When a file update is detected, it calls `update-lastmod.py` to update the `lastmod` of that file.
+
+Requires `fswatch`. Install e.g. using homebrew: `brew install fswatch`. 
