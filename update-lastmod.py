@@ -51,15 +51,17 @@ def update_lastmod(filepath):
             if filename == None:
                 if not fileinput.isstdin():
                     filename = fileinput.filename()
-                    if verbose:
+                    if verbose or debug:
                         sys.stderr.write("Reading from file: '" + filename + "' ")
                 else:
-                    if verbose:
+                    if verbose or debug:
                         sys.stderr.write("Reading from stdin: ")
                     filename = False
+                if debug:
+                    sys.stderr.write("\n")
 
             if debug:
-                sys.stderr.write("\nDEBUG: " + repr(line))
+                sys.stderr.write("DEBUG: " + repr(line) + "\n")
             elif verbose:
                 sys.stderr.write(".")
 
@@ -152,7 +154,7 @@ if __name__ == '__main__':
     parser.add_argument('-o', '--output',
                         nargs=1,
                         metavar='<file>',
-                        default="",
+                        default=[''],
                         dest="output_filename",
                         help='file to write output to. defaults to input file or stdout'
                         )
@@ -162,6 +164,9 @@ if __name__ == '__main__':
                         help='watch directory for changes. NOT yet implemented!')
 
     args = parser.parse_args()
+
+    if args.debug:
+        sys.stderr.write(repr(args) + "\n")
 
     debug = args.debug
     verbose = args.verbose
