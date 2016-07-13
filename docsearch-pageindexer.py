@@ -22,7 +22,7 @@ docsearch_mapping = { "content": "content",
                     }
 
 # Default weighting of pages.
-docsearch_weight = { "position": 1,
+docsearch_weight = { "position": 10,
                      "level": 10,
                      "page_rank": 0
                     }
@@ -66,6 +66,13 @@ def parse_md(filepath):
 
 
 def create_index_list(walk_dir, base_level, base_url, verbose=False):
+    """Create a list containing index data according to the docsearch spec.
+
+    walk_dir: the directory to recursively search for .md files
+    base_level: name of top level node
+    base_url: the base url used to construct page URLs
+    """
+
     global docsearch_mapping, docsearch_weight
 
     index_list = []
@@ -79,25 +86,44 @@ def create_index_list(walk_dir, base_level, base_url, verbose=False):
                 objectID += 1
                 filepath = os.path.join(root, filename)
 
-                # sub-path as string
+                # get data from the file (frontmatter and content)
+                filedata = parse_md(filepath)
+
+                # subpath (i.e. path below content dir) as string then converted
+                # to list
                 subpath = root[len(walk_dir):].rstrip(os.sep)
-                subpaths = subpath.lstrip(os.sep).split(os.sep)
-                # index.md use their parent dir. all other files become folders
+                subpath = subpath.lstrip(os.sep).split(os.sep)
+
+                # transform the subpath. Assumes that Hugo uses "pretty URLs"
+                # (strip the file extension '.md')
+                #
+                # index.md uses its parent dir. all other .md files become
+                # folders
                 if filename != "index.md":
-                    subpaths[-1] = filename[:-3]
-                hierarchy_list = [base_level]
-                hierarchy_list.extend(subpaths)
-                
-                url_subpath = "/".join(subpaths)
+                    subpath[-1] = filename[:-3]
+
+                # build the URL to the file
+                url_subpath = "/".join(subpath)
                 url = base_url + "/" + url_subpath + "/"
 
                 if verbose:
                     sys.stderr.write("Indexing '" + filepath + "' (" + url + ")\n")
 
-                # get data from the file (frontmatter and content)
-                filedata = parse_md(filepath)
+                # hierarchy_list contains the names of all levels (sections)
+                # and is used to build the hierarchy structures below
+                hierarchy_list = [base_level]
+                hierarchy_list.extend(subpath)
 
-                # create index entry
+                # replace the last hierarchy with the `linktitle` or `title`
+                # of the page if it exists
+                if "linktitle" in filedata.keys():
+                    hierarchy_list[-1] = filedata["linktitle"]
+                elif "title" in filedata.keys():
+                    hierarchy_list[-1] = filedata["title"]
+                
+                hierarchy_max_lvl = len(hierarchy_list) - 1
+
+                # create the new index entry
                 indexed_item = {'objectID': objectID, 'url': url }
 
                 # map filedata to docsearch structure
@@ -114,32 +140,61 @@ def create_index_list(walk_dir, base_level, base_url, verbose=False):
                                 aggregated.extend(filedata[filedata_subkey])
                         indexed_item[docsearch_key] = aggregated
 
-                    # hierarchy and hierarchy_complete
+                    # build hierarchy and hierarchy_complete dictionaries
+                    # - hierarchy items contain the names of the leaves
+                    # - hierarchy_complete items contains the full breadcrumb
+                    #   path for each leaf
+                    #
+                    # a hierarchy has levels 0-6
                     hierarchy = create_empty_hierarchy()
                     hierarchy_complete = create_empty_hierarchy()
                     for level in range(7):
+                        # fill in blanks for all levels with names
                         if level < len(hierarchy_list):
+                            # single leaf value for hiearchy
                             hierarchy["lvl" + str(level)] = hierarchy_list[level]
-                            hierarchy_complete["lvl" + str(level)] = " > ".join(hierarchy_list[:level])
+                            # breadcrumbs for hierarchy_complete
+                            hierarchy_complete["lvl" + str(level)] = " > ".join(hierarchy_list[:level+1])
                     indexed_item["hierarchy"] = hierarchy
                     indexed_item["hierarchy_complete"] = hierarchy_complete
 
                     # hierarchy_radio and type
+                    # - in hierarchy_radio, one of the levels has a value
+                    # - type contains the name of the deepest level, e.g. "lvl2"
                     hierarchy_radio = create_empty_hierarchy()
-                    max_lvl = len(subpaths) - 1
-                    hierarchy_radio["lvl" + str(max_lvl)] = subpaths[max_lvl]
+                    hierarchy_radio["lvl" + str(hierarchy_max_lvl)] = hierarchy_list[hierarchy_max_lvl]
                     indexed_item["hierarchy_radio"] = hierarchy_radio
-                    indexed_item["type"] = "lvl" + str(max_lvl)
+                    indexed_item["type"] = "lvl" + str(hierarchy_max_lvl)
 
-                    # anchor and weight
+                    # anchor is not captured
                     indexed_item["anchor"] = None
-                    indexed_item["weight"] = docsearch_weight
 
+                    # shallow copy the weight template (ok since no nesting)
+                    indexed_item["weight"] = docsearch_weight.copy()
+                    # use hierarchy depth as weight level
+                    indexed_item["weight"]["level"] = hierarchy_max_lvl
+
+                # add the indexed item to the index list (returned by function)
                 index_list.append(indexed_item)
+
     sys.stderr.write("Done indexing .md files in '" + walk_dir + "'" + "\n")
     return index_list
 
+
 def create_empty_hierarchy():
+    """Create an empty hierarchy structure (dict).
+
+    hierarchy = {
+                  "lvl0": None,
+                  "lvl1": None,
+                  "lvl2": None,
+                  "lvl3": None,
+                  "lvl4": None,
+                  "lvl5": None,
+                  "lvl6": None
+                }
+    """
+
     empty_hierarchy = {}
     for level_index in range(7):
         empty_hierarchy["lvl" + str(level_index)] = None
