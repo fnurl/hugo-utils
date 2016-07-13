@@ -28,10 +28,7 @@ docsearch_weight = { "position": 1,
                     }
 
 def parse_md(filepath):
-    """Parse a Hugo markdown file with YAML frontmatter.
-
-    Will strip markdown and Hugo shortcodes from text.
-    """
+    """Parse a Hugo markdown file with YAML frontmatter. Removes shortcodes."""
 
     yaml_string = ""
     in_yaml = None
@@ -48,7 +45,13 @@ def parse_md(filepath):
                 yaml_string += line
             else:
                 markdown_content += line
+    
     md_data = yaml.load(yaml_string)
+
+    # if no yaml was found, set md_data to a empty dict
+    if not md_data:
+        md_data = {}
+
     if not "content" in md_data.keys():
         html = markdown(markdown_content)
         plain_text = BeautifulSoup(html, "html.parser").get_text()
@@ -61,6 +64,7 @@ def parse_md(filepath):
         sys.stderr.write("ERROR: Could not store content for '" + filepath + "'. Frontmatter key 'content' exists!\n")
     return md_data
 
+
 def create_index_list(walk_dir, base_level, base_url, verbose=False):
     global docsearch_mapping, docsearch_weight
 
@@ -70,16 +74,17 @@ def create_index_list(walk_dir, base_level, base_url, verbose=False):
     for root, subdirs, files in os.walk(walk_dir):
         for filename in files:
 
-            # index md files
+            # only index md files
             if filename.endswith(".md"):
                 objectID += 1
                 filepath = os.path.join(root, filename)
 
+                # sub-path as string
                 subpath = root[len(walk_dir):].rstrip(os.sep)
                 subpaths = subpath.lstrip(os.sep).split(os.sep)
-                # index.md have special URLs
+                # index.md use their parent dir. all other files become folders
                 if filename != "index.md":
-                    subpaths.append(filename[:-3])
+                    subpaths[-1] = filename[:-3]
                 hierarchy_list = [base_level]
                 hierarchy_list.extend(subpaths)
                 
@@ -143,12 +148,29 @@ def create_empty_hierarchy():
 
 if __name__ == '__main__':
 
-    parser = argparse.ArgumentParser(prog="docsearch-pageindexer.py", description='Produce a docsearch compatible index file (JSON) by examining all Hugo markdown files in a directory and its sub-directories.')
-    parser.add_argument('content_dir', metavar="<content dir>", help='the top directory to search for .md files in')
-    parser.add_argument('-v', '--verbose', action='store_true', dest='verbose', help='verbose output')
-    parser.add_argument('-b', '--base-level', default='Site Home', dest='base_level', help='name of base level to use in index hierarchy. Defaults to "Site Home"')
-    parser.add_argument('-u', '--base-url', default='http://localhost', dest='base_url', help='base URL to use in the index. Defaults to http://localhost')
-    parser.add_argument('-t', '--tag', action='append', dest='tags', help='frontmatter taxonomy to use as tags in the index. Can be specified multiple times. E.g. -t tags -t categories')
+    parser = argparse.ArgumentParser(prog="docsearch-pageindexer.py",
+                                     description=
+"""Produce a docsearch compatible index file (JSON) by examining all Hugo
+markdown files in a directory and its sub-directories.""")
+    parser.add_argument('content_dir',
+                        metavar="<content dir>",
+                        help='the top directory to search for .md files in')
+    parser.add_argument('-v', '--verbose',
+                        action='store_true',
+                        dest='verbose',
+                        help='verbose output')
+    parser.add_argument('-b', '--base-level',
+                        default='Site Home',
+                        dest='base_level', 
+                        help='name of base level to use in index hierarchy. Defaults to "Site Home"')
+    parser.add_argument('-u', '--base-url', 
+                        default='http://localhost', 
+                        dest='base_url', 
+                        help='base URL to use in the index. Defaults to http://localhost')
+    parser.add_argument('-t', '--tag', 
+                        action='append', 
+                        dest='tags', 
+                        help='frontmatter taxonomy to use as tags in the index. Can be specified multiple times. E.g. -t tags -t categories')
 
     args = parser.parse_args()
 
