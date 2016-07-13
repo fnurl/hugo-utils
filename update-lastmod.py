@@ -6,16 +6,12 @@ TODO: Use watchdog and also watch for file changes.
 """
 
 
-
+import argparse
 import sys
 import fileinput
 from datetime import datetime
 from dateutil import tz
 
-debug = False
-dryrun = False
-verbose = False
-output_filename = ""
 
 def get_local_isotime():
     """Return a string with the ISO-formatted local time with timezone info."""
@@ -34,7 +30,7 @@ def output(outputstr, buffer):
     buffer.append(outputstr)
 
 
-def update_lastmod():
+def update_lastmod(filepath):
     """Replace the lastmod YAML property with a current one.
 
     If no lastmod property is found, one is added to the end of the
@@ -48,7 +44,7 @@ def update_lastmod():
     filename = None
     output_buffer = []
     
-    with fileinput.input() as f_input:
+    with fileinput.input(files=filepath) as f_input:
         for line in f_input:
 
             # save filename if not reading from stdin
@@ -64,8 +60,8 @@ def update_lastmod():
 
             if debug:
                 sys.stderr.write("\nDEBUG: " + repr(line))
-            #else:
-            #    sys.stderr.write(".")
+            elif verbose:
+                sys.stderr.write(".")
 
             # start/end of YAML block detected
             # in_yaml == None at beginning, True if we are inside a YAML
@@ -89,8 +85,6 @@ def update_lastmod():
             # pass original line
             output(line, output_buffer)
 
-    # output time - default is stdout
-    save_file = sys.stdout
 
     # if a file was modified. i.e. filename is a string, not False/None
     if filename and verbose:
@@ -99,26 +93,29 @@ def update_lastmod():
         sys.stderr.write("\nRead " + str(len(output_buffer)) + " lines from stdin.\n")
 
     # if no filename was recieved via the flags -o or --output
+    # filename will be False is we are reading from stdin
     if output_filename == "":
         output_filename = filename
 
+    # declared for future use. will remain None, or be either a file or stdout
+    save_file = None
+
     # output_filename found
     if output_filename:
-        # output_filename but dryrun
+        # got an output_filename but dryrun
         if dryrun:
             if verbose:
                 sys.stderr.write("Dryrun: Not writing to '" + output_filename + "'\n")
+            # no save_file needs to be opened
+            save_file = None
+        # not a dryrun, so we open the file to save to
         else:
             if verbose:
                 sys.stderr.write("Saving to '" + output_filename + "\n")
             save_file = open(output_filename, 'w')
-
-        # open file to save to
-
-    # output to stdout
-    #else:
-    #    if verbose:
-    #        sys.stderr.write("Output to stdout.")
+    # file to save to, so we output to stdout
+    else:
+        save_file = sys.stdout
 
     if not dryrun:
         for line in output_buffer:
@@ -129,46 +126,51 @@ def update_lastmod():
 
 # run if called from the command line
 if __name__ == '__main__':
-    # options to remove as not to confuse fileinput.input() later on.
-    remove_args = []
 
-    # take care of options
-    if len(sys.argv) > 1:
-        for arg in sys.argv[1:]:
-            if arg == "--verbose" or arg == "-v":
-                remove_args.append(arg)
-                verbose = True
-            elif arg == "--debug" or arg == "-d":
-                remove_args.append(arg)
-                debug = True
-            elif arg == "--dryrun" or arg == "-n":
-                remove_args.append(arg)
-                dryrun = True
-            elif arg.startswith("--watch") or arg.startswith("-w"):
-                remove_args.append(arg)
-                if arg.find("=") != -1:
-                    watch = True
-                    watch_dir = arg[arg.find("=")+1]
-                    if verbose:
-                        sys.stderr.write("Watch dir: " + watch_dir)
-                else:
-                    sys.stderr.write("No watch dir found.\n")
-                    sys.exit(1)
-            elif arg.startswith("--output") or arg.startswith("-o"):
-                remove_args.append(arg)
-                if arg.find("=") != -1:
-                    output_filename = arg[arg.find("=")+1]
-                    if verbose:
-                        sys.stderr.write("Output file: " + output_filename)
-                else:
-                    sys.stderr.write("No output filename found.\n")
-                    sys.exit(1)
+    parser = argparse.ArgumentParser(prog="update-lastmod.py",
+                                     description=
+"""Updates the lastmod YAML frontmatter property of a .md file.""")
 
-    # remove options we have used
-    for arg_to_remove in remove_args:
-        sys.argv.remove(arg_to_remove)
+    # Add the positional option only if we are not reading from stdin
+    # ... a hack, I know.
+    parser.add_argument('filepath',
+                        default="-",
+                        nargs='?',
+                        help='file to process, will use stdin if not supplied')
+    parser.add_argument('-v', '--verbose',
+                        action='store_true',
+                        dest='verbose',
+                        help='verbose output')
+    parser.add_argument('-n', '--dryrun',
+                        action='store_true',
+                        dest='dryrun', 
+                        help="don't modify any files")
+    parser.add_argument('-d', '--debug', 
+                        action='store_true', 
+                        dest='debug', 
+                        help='output debug info')
+    parser.add_argument('-o', '--output',
+                        nargs=1,
+                        metavar='<file>',
+                        default="",
+                        dest="output_filename",
+                        help='file to write output to. defaults to input file or stdout'
+                        )
+    parser.add_argument('-w', '--watch', 
+                        dest='watch_dir',
+                        metavar='<dir>',
+                        help='watch directory for changes. NOT yet implemented!')
+
+    args = parser.parse_args()
+
+    debug = args.debug
+    verbose = args.verbose
+    dryrun = args.dryrun
+    output_filename = args.output_filename[0]
 
     try:
-        update_lastmod()
+        update_lastmod(args.filepath)
+    except FileNotFoundError:
+        sys.stderr.write("Could not find file: '" + args.filepath + "'. Please specify a filepath before options use with stdin.\n")
     except KeyboardInterrupt:
         sys.stderr.write("\nctrl-c recieved.\n")
