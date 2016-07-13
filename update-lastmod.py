@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 
-"""Update lastmod in YAML frontmatter of a Hugo markdown file."""
+"""Update lastmod in YAML frontmatter of a Hugo markdown file.
+
+TODO: Use watchdog and also watch for file changes.
+"""
+
 
 
 import sys
@@ -140,12 +144,23 @@ if __name__ == '__main__':
             elif arg == "--dryrun" or arg == "-n":
                 remove_args.append(arg)
                 dryrun = True
+            elif arg.startswith("--watch") or arg.startswith("-w"):
+                remove_args.append(arg)
+                if arg.find("=") != -1:
+                    watch = True
+                    watch_dir = arg[arg.find("=")+1]
+                    if verbose:
+                        sys.stderr.write("Watch dir: " + watch_dir)
+                else:
+                    sys.stderr.write("No watch dir found.\n")
+                    sys.exit(1)
             elif arg.startswith("--output") or arg.startswith("-o"):
                 remove_args.append(arg)
-                if arg.find("=") != -1 and verbose:
+                if arg.find("=") != -1:
                     output_filename = arg[arg.find("=")+1]
-                    sys.stderr.write("Output file: " + output_filename)
-                elif verbose:
+                    if verbose:
+                        sys.stderr.write("Output file: " + output_filename)
+                else:
                     sys.stderr.write("No output filename found.\n")
                     sys.exit(1)
 
