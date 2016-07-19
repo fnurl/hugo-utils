@@ -57,7 +57,7 @@ def parse_md(filepath):
         plain_text = BeautifulSoup(html, "html.parser").get_text()
 
         # remove Hugo shortcodes
-        plain_text = re.sub(r"\{\{% .* %\}\}", "", plain_text)
+        plain_text = re.sub(r"\{\{[%<] .* [%>]\}\}", "", plain_text)
 
         md_data["content"] = plain_text
     else:
@@ -100,7 +100,12 @@ def create_index_list(walk_dir, base_level, base_url, verbose=False):
                 # index.md uses its parent dir. all other .md files become
                 # folders
                 if filename != "index.md":
-                    subpath[-1] = filename[:-3]
+                    # append if path is not just the root
+                    if len(subpath) > 1:
+                        subpath.append(filename[:-3])
+                    # if just the root, i.e. subpath == [""], then replace it
+                    else:
+                        subpath[0] = filename[:-3]
 
                 # build the URL to the file
                 url_subpath = "/".join(subpath)
